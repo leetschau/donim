@@ -64,8 +64,7 @@ proc parseCmdArgs() =
     else:
       listNotes()
   of "s", "search":
-    # searchNotes(args[1 .. args.high])
-    searchNotes(@["aa", "bb"])
+     searchNotes(args[1 .. args.high])
   else:
     echo Usage
     quit(0)

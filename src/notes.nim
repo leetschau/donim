@@ -4,11 +4,13 @@ const
   AppBase = getHomeDir() / ".donno"
   NoteRepo = AppBase / "repo"
   CacheFile = AppBase / ".note.cache"
-
   DtFmt = "yyyy-MM-dd hh:mm:ss"
+  DateFmt = "yyyy-MM-dd"
+  Header = "No.    Updated Notebook Title Created Tags\n"
 
 
-type Note = object
+type
+  Note = object
     title: string
     tags: seq[string]
     notebook: string
@@ -17,12 +19,103 @@ type Note = object
     body: string
     filepath: string
 
+  SearchField = enum sTitle, sTag, sNotebook, sCreated, sUpdated, sContent
 
-proc `$`(note: Note): string =
+  SearchType = enum stText, stTime
+
+  SearchTerm = object
+    field: SearchField
+    case kind: SearchType
+    of stText:
+      item: string
+      ignoreCase: bool
+      wholeWord: bool
+    of stTime:
+      tpoint: DateTime
+      before: bool  # "true" means the note under investigation was created
+                    # before the filtering time point specified by the user
+
+func `$`(note: Note): string =
   let tagstr = note.tags.join("; ")
-  let upd = note.updated.format(DtFmt)
-  let cre = note.created.format(DtFmt)
+  let upd = note.updated.format(DateFmt)
+  let cre = note.created.format(DateFmt)
   &"{upd} {note.notebook}: {note.title} {cre} [{tagstr}]"
+
+func matchTitle(note: Note,
+                term: string,
+                ignoreCase: bool,
+                matchWholeWord: bool): bool =
+  let token = (if ignoreCase: term.toLowerAscii() else: term)
+  let target = (if ignoreCase: note.title.toLowerAscii() else: note.title)
+  if matchWholeWord:
+    let titlews = target.split(" ")
+    token in titlews
+  else:
+    token in target
+
+func matchTag(note: Note,
+              term: string,
+              ignoreCase: bool,
+              matchWholeWord: bool): bool =
+  let token = (if ignoreCase: term.toLowerAscii() else: term)
+  let tagline = (if ignoreCase: note.tags.join(" ").toLowerAscii()
+                 else: note.tags.join(" "))
+  if matchWholeWord:
+    token in tagline.split(" ")
+  else:
+    token in tagline
+
+func matchNotebook(note: Note,
+                   term: string,
+                   ignoreCase: bool,
+                   matchWholeWord: bool): bool =
+  let token = (if ignoreCase: term.toLowerAscii() else: term)
+  let target = (if ignoreCase: note.notebook.toLowerAscii() else: note.notebook)
+  if matchWholeWord:
+    let pathws = target.split("/")
+    token in pathws
+  else:
+    token in target
+
+func matchBody(note: Note,
+               term: string,
+               ignoreCase: bool,
+               matchWholeWord: bool): bool =
+  let token = (if ignoreCase: term.toLowerAscii() else: term)
+  let target = (if ignoreCase: note.body.toLowerAscii() else: note.body)
+  if matchWholeWord:
+    let bodyws = target.split(" ")
+    token in bodyws
+  else:
+    token in target
+
+func matches(note: Note, term: SearchTerm): bool =
+  case term.kind
+  of stText:
+    case term.field
+    of sTitle: note.matchTitle(term.item, term.ignoreCase, term.wholeWord)
+    of sTag: note.matchTag(term.item, term.ignoreCase, term.wholeWord)
+    of sNotebook: note.matchNotebook(term.item, term.ignoreCase, term.wholeWord)
+    of sContent: 
+      note.matchTitle(term.item, term.ignoreCase, term.wholeWord) or
+      note.matchTag(term.item, term.ignoreCase, term.wholeWord) or
+      note.matchNotebook(term.item, term.ignoreCase, term.wholeWord) or
+      note.matchBody(term.item, term.ignoreCase, term.wholeWord) or
+      (term.item in $note.created) or (term.item in $note.updated)
+    else: false
+  of stTime:
+    case term.field
+    of sCreated:
+      if term.before:
+        note.created < term.tpoint
+      else:
+        note.created >= term.tpoint
+    of sUpdated:
+      if term.before:
+        note.updated < term.tpoint
+      else:
+        note.updated >= term.tpoint
+    else: false
 
 
 proc loadNote(npath: string): Note =
@@ -63,9 +156,46 @@ proc displayNotes(notes: seq[Note]): string =
   ## Extract meta-data from notes, display on the console
   ## and save to disk for later usage
   writeFile(CacheFile, notes.mapIt(it.filepath).join("\n"))
-  let header = "No.   Updated, Notebook, Title, Created, Tags\n"
   let idx = toSeq(1 .. notes.len)
-  header & zip(idx, notes).mapIt($it[0] & ". " & $(it[1])).join("\n")
+  Header & zip(idx, notes).mapIt(&"{$it[0]:>2}" & ". " & $(it[1])).join("\n")
+
+
+proc buildSearchTerm(inp: string): SearchTerm =
+  let segs = inp.split(":")
+  if segs.len == 1:
+    return SearchTerm(field: sContent, kind: stText, item: inp,
+                      ignoreCase: true, wholeWord: false)
+  elif segs.len == 2:
+    case segs[0]
+    of "ti": return SearchTerm(field: sTitle, kind: stText,
+               item: segs[1], ignoreCase: true, wholeWord: false)
+    of "ta": return SearchTerm(field: sTag, kind: stText,
+               item: segs[1], ignoreCase: true, wholeWord: false)
+    of "nb": return SearchTerm(field: sNotebook, kind: stText,
+               item: segs[1], ignoreCase: true, wholeWord: false)
+    of "cr": return SearchTerm(field: sCreated, kind: stTime,
+               tpoint: parse(segs[1], DateFmt), before: false)
+    of "up": return SearchTerm(field: sUpdated, kind: stTime,
+               tpoint: parse(segs[1], DateFmt), before: false)
+  elif segs.len == 3:
+    case segs[0]
+    of "ti": result =
+      SearchTerm(field: sTitle, kind: stText, item: segs[1])
+    of "ta": result =
+      SearchTerm(field: sTag, kind: stText, item: segs[1])
+    of "nb": result =
+      SearchTerm(field: sNotebook, kind: stText, item: segs[1])
+    of "cr": result =
+      SearchTerm(field: sCreated, kind: stTime, tpoint: parse(segs[1], DateFmt))
+    of "up": result =
+      SearchTerm(field: sUpdated, kind: stTime, tpoint: parse(segs[1], DateFmt))
+    case segs[2]
+    of "i", "W", "iW", "Wi": result.ignoreCase = true; result.wholeWord = false
+    of "I", "IW", "WI": result.ignoreCase = false; result.wholeWord = false
+    of "w", "iw", "wi": result.ignoreCase = true; result.wholeWord = true
+    of "Iw", "wI": result.ignoreCase = false; result.wholeWord = true
+    of "b": result.before = true
+    of "B": result.before = false
 
 
 proc listNotes*(num: int = 5) =
@@ -73,7 +203,11 @@ proc listNotes*(num: int = 5) =
   echo displayNotes(notes[0 ..< num])
 
 
-proc searchNotes*(terms: seq[string]) =
-  echo "search ", terms, " in note repo"
+proc searchNotes*(words: seq[string]) =
+  let terms = map(words, buildSearchTerm)
+  let notes = loadNotes(NoteRepo)
+  let matchedNotes = foldl(terms, a.filterIt(it.matches(b)), notes)
+  echo displayNotes(matchedNotes)
+
 
 
