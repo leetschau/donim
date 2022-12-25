@@ -4,13 +4,14 @@ const
   AppBase = getHomeDir() / ".donno"
   NoteRepo = AppBase / "repo"
   CacheFile = AppBase / ".note.cache"
-  DtFmt = "yyyy-MM-dd hh:mm:ss"
+  DtFmt = "yyyy-MM-dd HH:mm:ss"
   DateFmt = "yyyy-MM-dd"
   Header = "No.    Updated  Notebook  Title  Created  Tags\n"
   TempNotePath = "/tmp/dsnote-tmp.md"
   NotePrefix = "repo/note"
 
   Editor = "nvim -u ~/.config/nvim/text.vim"
+  Viewer = "nvim -R -u ~/.config/nvim/text.vim"
   DefaultNotebook = "/Diary/2022"
 
 
@@ -203,7 +204,7 @@ proc buildSearchTerm(inp: string): SearchTerm =
     of "B": result.before = false
 
 
-proc saveNote(note: Note, fpath: string) =
+proc saveNote(fpath: string, note: Note) =
   let tagline = note.tags.join("; ")
   let notestr = &"Title: {note.title}\nTags: {tagline}\n" &
     &"Notebook: {note.notebook}\nCreated: {note.created.format(DtFmt)}\n" &
@@ -223,7 +224,21 @@ proc addNote*() =
   let ts = now().format("yyMMddHHmmss")
   let newNote = loadNote(TempNotePath)
   let noteName = NotePrefix & ts & ".md"
-  saveNote(newNote, AppBase / noteName)
+  saveNote(AppBase / noteName, newNote)
+
+
+proc editNote*(num: int = 1) =
+  let notePaths = readFile(CacheFile).split("\n")
+  let fpath = notePaths[num - 1]
+  let oNote = loadNote(fpath)
+  let nNote = Note(title: oNote.title, tags: oNote.tags,
+                   notebook: oNote.notebook, created: oNote.created,
+                   updated: now(), body: oNote.body, filepath: fpath)
+  saveNote(fpath, nNote)
+  let ret = execShellCmd(&"{Editor} {fpath}")
+  if ret != 0:
+    echo "Error occured when editing file, quit"
+    quit(1)
 
 
 proc listNotes*(num: int = 5) =
@@ -238,4 +253,7 @@ proc searchNotes*(words: seq[string]) =
   echo displayNotes(matchedNotes)
 
 
-
+proc viewNote*(num: int = 1) =
+  let notePaths = readFile(CacheFile).split("\n")
+  let fpath = notePaths[num - 1]
+  discard execShellCmd(&"{Viewer} {fpath}")

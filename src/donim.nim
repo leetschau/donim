@@ -29,8 +29,6 @@ Commands:
           list notebooks [aliases: lnb]
   search
           search pattern(s) in notes [aliases: s]
-  search-complex
-          search complex pattern(s) in notes [aliases: sc]
   sync
           sync (pull) notes from remote repo [aliases: syn]
   view
@@ -59,6 +57,11 @@ proc parseCmdArgs() =
     echo NimblePkgVersion
     quit(0)
   of "a", "add": addNote()
+  of "e", "edit":
+    if args.len > 1:
+      editNote(parseInt(args[1]))
+    else:
+      editNote()
   of "l", "list":
     if args.len > 1:
       listNotes(parseInt(args[1]))
@@ -66,6 +69,11 @@ proc parseCmdArgs() =
       listNotes()
   of "s", "search":
      searchNotes(args[1 .. args.high])
+  of "v", "view":
+    if args.len > 1:
+      viewNote(parseInt(args[1]))
+    else:
+      viewNote()
   else:
     echo Usage
     quit(0)
