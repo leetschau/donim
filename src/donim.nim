@@ -1,5 +1,6 @@
 import std/[os, strutils]
 import notes
+import config
 
 
 const
@@ -43,6 +44,9 @@ Options:
           Print version information
 """
 
+  ConfUsage = "Get config: conf -g <key>\nSet config: conf -s <key> <val>"
+
+
 proc parseCmdArgs() =
   let args = commandLineParams()
   if len(args) == 0:
@@ -57,6 +61,18 @@ proc parseCmdArgs() =
     echo NimblePkgVersion
     quit(0)
   of "a", "add": addNote()
+  of "config", "conf":
+    if args.len == 1:
+      echo ConfUsage
+    elif args.len == 2 and args[1] == "-g":
+      printConfig("/")
+    elif args.len == 3 and args[1] == "-g":
+      printConfig(args[2])
+    elif args.len == 4 and args[1] == "-s":
+      setConfig(args[2], args[3])
+    else:
+      echo ConfUsage
+
   of "e", "edit":
     if args.len > 1:
       editNote(parseInt(args[1]))

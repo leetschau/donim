@@ -1,18 +1,12 @@
-import std/[algorithm, os, sequtils, strformat, strutils, times]
+import std/[algorithm, json, os, sequtils, strformat, strutils, times]
+import config
 
 const
-  AppBase = getHomeDir() / ".donno"
-  NoteRepo = AppBase / "repo"
-  CacheFile = AppBase / ".note.cache"
   DtFmt = "yyyy-MM-dd HH:mm:ss"
   DateFmt = "yyyy-MM-dd"
   Header = "No.    Updated  Notebook  Title  Created  Tags\n"
   TempNotePath = "/tmp/dsnote-tmp.md"
   NotePrefix = "repo/note"
-
-  Editor = "nvim -u ~/.config/nvim/text.vim"
-  Viewer = "nvim -R -u ~/.config/nvim/text.vim"
-  DefaultNotebook = "/Diary/2022"
 
 
 type
@@ -124,6 +118,11 @@ func matches(note: Note, term: SearchTerm): bool =
     else: false
 
 
+proc getCacheFilePath(): string =
+  let confs = to(loadConfigs(), Config)
+  confs.appHome / ".note.cache"
+
+
 proc loadNote(npath: string): Note =
   let raw = readFile(npath)
   let lines = splitLines(raw)
@@ -150,9 +149,10 @@ proc loadNote(npath: string): Note =
   result.filepath = npath
 
 
-proc loadNotes(repoPath: string): seq[Note] =
+proc loadNotes(): seq[Note] =
   ## Load all markdown file from the 'repo_path' and sort with updated time
-  let noteFiles = toSeq(walkFiles(repoPath / "*.md"))
+  let confs = to(loadConfigs(), Config)
+  let noteFiles = toSeq(walkFiles(confs.appHome / "repo" / "*.md"))
   result = map(noteFiles, loadNote)
   result.sort(proc (x, y: Note): int = result = cmp(x.updated, y.updated),
               order = SortOrder.Descending)
@@ -161,7 +161,7 @@ proc loadNotes(repoPath: string): seq[Note] =
 proc displayNotes(notes: seq[Note]): string =
   ## Extract meta-data from notes, display on the console
   ## and save to disk for later usage
-  writeFile(CacheFile, notes.mapIt(it.filepath).join("\n"))
+  writeFile(getCacheFilePath(), notes.mapIt(it.filepath).join("\n"))
   let idx = toSeq(1 .. notes.len)
   Header & zip(idx, notes).mapIt(&"{$it[0]:>2}" & ". " & $(it[1])).join("\n")
 
@@ -213,47 +213,50 @@ proc saveNote(fpath: string, note: Note) =
 
 
 proc addNote*() =
-  let noteTemplate = &"Title: \nTags: \nNotebook: {DefaultNotebook}\n" &
+  let confs = to(loadConfigs(), Config)
+  let noteTemplate = &"Title: \nTags: \nNotebook: {confs.defaultNotebook}\n" &
     &"Created: {now().format(DtFmt)}\nUpdated: {now().format(DtFmt)}" &
     "\n\n------\n\n"
   writeFile(TempNotePath, noteTemplate)
-  let ret = execShellCmd(&"{Editor} {TempNotePath}")
+  let ret = execShellCmd(&"{confs.editor} {TempNotePath}")
   if ret != 0:
     echo "Error occured when editing file, quit"
     quit(1)
   let ts = now().format("yyMMddHHmmss")
   let newNote = loadNote(TempNotePath)
-  let noteName = NotePrefix & ts & ".md"
-  saveNote(AppBase / noteName, newNote)
+  let notePath = NotePrefix & ts & ".md"
+  saveNote(confs.appHome / notePath, newNote)
 
 
 proc editNote*(num: int = 1) =
-  let notePaths = readFile(CacheFile).split("\n")
+  let confs = to(loadConfigs(), Config)
+  let notePaths = readFile(getCacheFilePath()).split("\n")
   let fpath = notePaths[num - 1]
   let oNote = loadNote(fpath)
   let nNote = Note(title: oNote.title, tags: oNote.tags,
                    notebook: oNote.notebook, created: oNote.created,
                    updated: now(), body: oNote.body, filepath: fpath)
   saveNote(fpath, nNote)
-  let ret = execShellCmd(&"{Editor} {fpath}")
+  let ret = execShellCmd(&"{confs.editor} {fpath}")
   if ret != 0:
     echo "Error occured when editing file, quit"
     quit(1)
 
 
 proc listNotes*(num: int = 5) =
-  let notes = loadNotes(NoteRepo)
+  let notes = loadNotes()
   echo displayNotes(notes[0 ..< num])
 
 
 proc searchNotes*(words: seq[string]) =
   let terms = map(words, buildSearchTerm)
-  let notes = loadNotes(NoteRepo)
+  let notes = loadNotes()
   let matchedNotes = foldl(terms, a.filterIt(it.matches(b)), notes)
   echo displayNotes(matchedNotes)
 
 
 proc viewNote*(num: int = 1) =
-  let notePaths = readFile(CacheFile).split("\n")
+  let confs = to(loadConfigs(), Config)
+  let notePaths = readFile(getCacheFilePath()).split("\n")
   let fpath = notePaths[num - 1]
-  discard execShellCmd(&"{Viewer} {fpath}")
+  discard execShellCmd(&"{confs.viewer} {fpath}")
