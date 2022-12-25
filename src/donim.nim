@@ -58,6 +58,7 @@ proc parseCmdArgs() =
   of "-V", "--version":
     echo NimblePkgVersion
     quit(0)
+  of "a", "add": addNote()
   of "l", "list":
     if args.len > 1:
       listNotes(parseInt(args[1]))

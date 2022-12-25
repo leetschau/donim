@@ -6,7 +6,12 @@ const
   CacheFile = AppBase / ".note.cache"
   DtFmt = "yyyy-MM-dd hh:mm:ss"
   DateFmt = "yyyy-MM-dd"
-  Header = "No.    Updated Notebook Title Created Tags\n"
+  Header = "No.    Updated  Notebook  Title  Created  Tags\n"
+  TempNotePath = "/tmp/dsnote-tmp.md"
+  NotePrefix = "repo/note"
+
+  Editor = "nvim -u ~/.config/nvim/text.vim"
+  DefaultNotebook = "/Diary/2022"
 
 
 type
@@ -196,6 +201,29 @@ proc buildSearchTerm(inp: string): SearchTerm =
     of "Iw", "wI": result.ignoreCase = false; result.wholeWord = true
     of "b": result.before = true
     of "B": result.before = false
+
+
+proc saveNote(note: Note, fpath: string) =
+  let tagline = note.tags.join("; ")
+  let notestr = &"Title: {note.title}\nTags: {tagline}\n" &
+    &"Notebook: {note.notebook}\nCreated: {note.created.format(DtFmt)}\n" &
+    &"Updated: {note.updated.format(DtFmt)}\n\n------\n\n{note.body}"
+  writeFile(fpath, notestr)
+
+
+proc addNote*() =
+  let noteTemplate = &"Title: \nTags: \nNotebook: {DefaultNotebook}\n" &
+    &"Created: {now().format(DtFmt)}\nUpdated: {now().format(DtFmt)}" &
+    "\n\n------\n\n"
+  writeFile(TempNotePath, noteTemplate)
+  let ret = execShellCmd(&"{Editor} {TempNotePath}")
+  if ret != 0:
+    echo "Error occured when editing file, quit"
+    quit(1)
+  let ts = now().format("yyMMddHHmmss")
+  let newNote = loadNote(TempNotePath)
+  let noteName = NotePrefix & ts & ".md"
+  saveNote(newNote, AppBase / noteName)
 
 
 proc listNotes*(num: int = 5) =
