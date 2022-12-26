@@ -120,7 +120,7 @@ func matches(note: Note, term: SearchTerm): bool =
 
 proc getCacheFilePath(): string =
   let confs = to(loadConfigs(), Config)
-  confs.appHome / ".note.cache"
+  confs.app_home / ".note.cache"
 
 
 proc loadNote(npath: string): Note =
@@ -152,7 +152,7 @@ proc loadNote(npath: string): Note =
 proc loadNotes(): seq[Note] =
   ## Load all markdown file from the 'repo_path' and sort with updated time
   let confs = to(loadConfigs(), Config)
-  let noteFiles = toSeq(walkFiles(confs.appHome / "repo" / "*.md"))
+  let noteFiles = toSeq(walkFiles(confs.app_home / "repo" / "*.md"))
   result = map(noteFiles, loadNote)
   result.sort(proc (x, y: Note): int = result = cmp(x.updated, y.updated),
               order = SortOrder.Descending)
@@ -214,7 +214,7 @@ proc saveNote(fpath: string, note: Note) =
 
 proc addNote*() =
   let confs = to(loadConfigs(), Config)
-  let noteTemplate = &"Title: \nTags: \nNotebook: {confs.defaultNotebook}\n" &
+  let noteTemplate = &"Title: \nTags: \nNotebook: {confs.default_notebook}\n" &
     &"Created: {now().format(DtFmt)}\nUpdated: {now().format(DtFmt)}" &
     "\n\n------\n\n"
   writeFile(TempNotePath, noteTemplate)
@@ -225,7 +225,7 @@ proc addNote*() =
   let ts = now().format("yyMMddHHmmss")
   let newNote = loadNote(TempNotePath)
   let notePath = NotePrefix & ts & ".md"
-  saveNote(confs.appHome / notePath, newNote)
+  saveNote(confs.app_home / notePath, newNote)
 
 
 proc editNote*(num: int = 1) =

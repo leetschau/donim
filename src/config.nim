@@ -5,8 +5,8 @@ const
 
 
 type Config* = object
-  appHome*: string
-  defaultNotebook*: string
+  app_home*: string
+  default_notebook*: string
   editor*: string
   viewer*: string
 
@@ -16,8 +16,8 @@ proc loadConfigs*(): JsonNode =
   let confFile = confPath / ConfigFile
   if not fileExists(conffile):
     let defaultConfig = Config(
-        appHome: getHomeDir() / ".donno",
-        defaultNotebook: "/Misc",
+        app_home: getHomeDir() / ".donno",
+        default_notebook: "/Misc",
         editor: "nvim",
         viewer: "nvim -R")
     if not dirExists(confPath): createDir(confPath)
